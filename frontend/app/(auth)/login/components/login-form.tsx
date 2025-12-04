@@ -24,8 +24,10 @@ import {
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
+import { useRouter } from 'next/navigation';
 
 const LoginForm = () => {
+  const router = useRouter();
   const form = useForm<LoginBodyType>({
     resolver: zodResolver(LoginBody),
     defaultValues: {
@@ -59,7 +61,23 @@ const LoginForm = () => {
         return data as SuccessResponseType<LoginSuccessData>;
       });
 
+      // Save session token to cookie via API route
+      const authResponse = await fetch('/api/auth', {
+        method: 'POST',
+        body: JSON.stringify(result),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!authResponse.ok) {
+        toast.error('Không thể lưu session');
+        return;
+      }
+
       toast.success(result.payload.message);
+      router.push('/me');
+      router.refresh();
     } catch (error) {
       // Type-safe error handling
       const errorResponse = error as ErrorResponseType;
