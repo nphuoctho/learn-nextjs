@@ -13,36 +13,71 @@ import {
 import { Input } from '@/components/ui/input';
 import envConfig from '@/config';
 import {
-  RegisterBody,
-  RegisterBodyType,
-} from '@/schemaValidations/auth.schema';
+  LoginBodyType,
+  LoginBody,
+  LoginSuccessData,
+} from '@/schema-validations/auth.schema';
+import {
+  ErrorResponseType,
+  SuccessResponseType,
+} from '@/schema-validations/common.schema';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
+import { toast } from 'sonner';
 
-const RegisterForm = () => {
-  const form = useForm<RegisterBodyType>({
-    resolver: zodResolver(RegisterBody),
+const LoginForm = () => {
+  const form = useForm<LoginBodyType>({
+    resolver: zodResolver(LoginBody),
     defaultValues: {
-      name: '',
       email: '',
       password: '',
-      confirmPassword: '',
     },
   });
 
-  const onSubmit = async (values: RegisterBodyType) => {
-    const result = await fetch(
-      `${envConfig.NEXT_PUBLIC_API_URL}/auth/register`,
-      {
-        body: JSON.stringify(values),
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        method: 'POST',
-      }
-    ).then((res) => res.json());
+  const onSubmit = async (values: LoginBodyType) => {
+    try {
+      const result = await fetch(
+        `${envConfig.NEXT_PUBLIC_API_URL}/auth/login`,
+        {
+          body: JSON.stringify(values),
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          method: 'POST',
+        }
+      ).then(async (res) => {
+        const payload = await res.json();
+        const data = {
+          status: res.status,
+          payload,
+        };
 
-    console.log('🚀 ~ onSubmit ~ result:', result);
+        if (!res.ok) {
+          throw data;
+        }
+
+        return data as SuccessResponseType<LoginSuccessData>;
+      });
+
+      toast.success(result.payload.message);
+    } catch (error) {
+      // Type-safe error handling
+      const errorResponse = error as ErrorResponseType;
+
+      if (errorResponse.status === 422 && errorResponse.payload.errors) {
+        errorResponse.payload.errors.forEach((err) => {
+          // Ensure the field exists in the form schema
+          if (err.field in form.formState.defaultValues!) {
+            form.setError(err.field as keyof LoginBodyType, {
+              type: 'server',
+              message: err.message,
+            });
+          }
+        });
+      } else {
+        toast.error(errorResponse.payload.message);
+      }
+    }
   };
 
   return (
@@ -52,23 +87,6 @@ const RegisterForm = () => {
         className='space-y-8'
         noValidate
       >
-        <FormField
-          control={form.control}
-          name='name'
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Name</FormLabel>
-              <FormControl>
-                <Input placeholder='shadcn' {...field} />
-              </FormControl>
-              <FormDescription>
-                This is your public display name.
-              </FormDescription>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
         <FormField
           control={form.control}
           name='email'
@@ -99,25 +117,10 @@ const RegisterForm = () => {
           )}
         />
 
-        <FormField
-          control={form.control}
-          name='confirmPassword'
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Confirm Password</FormLabel>
-              <FormControl>
-                <Input type='password' placeholder='shadcn' {...field} />
-              </FormControl>
-              <FormDescription>This is your confirm password.</FormDescription>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
         <Button type='submit'>Submit</Button>
       </form>
     </Form>
   );
 };
 
-export default RegisterForm;
+export default LoginForm;
